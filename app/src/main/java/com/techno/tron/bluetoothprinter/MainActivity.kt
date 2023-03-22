@@ -60,9 +60,8 @@ class MainActivity : AppCompatActivity() {
             imageView?.visibility = View.VISIBLE
             imageView?.setImageBitmap(bitmap)
 
-            val textResult = textRecognizer?.process(InputImage.fromBitmap(bitmap, 0))
+            textRecognizer?.process(InputImage.fromBitmap(bitmap, 0))
                 ?.addOnSuccessListener {
-                    Log.d("TAG","txt : ${it.text}")
                     imageView?.visibility  = View.INVISIBLE
                     editText?.setText(it.text)
                     editText?.visibility = View.VISIBLE
@@ -72,4 +71,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun print(text:String){
+        
+    }
 }

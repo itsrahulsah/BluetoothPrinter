@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "310167564249",
+    "project_id": "bluetooth-printer-8bde6",
+    "storage_bucket": "bluetooth-printer-8bde6.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:310167564249:android:ed4b902e6d9dc4c320b3c8",
+        "android_client_info": {
+          "package_name": "com.techno.tron.bluetoothprinter"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "310167564249-g0lgdjsknij41n1m5v1sdvr1o5g28dve.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTirqvQVSweWXhfmzI9C4PEGcHDj8nDJg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "310167564249-g0lgdjsknij41n1m5v1sdvr1o5g28dve.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
