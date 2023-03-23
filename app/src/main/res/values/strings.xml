@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Bluetooth Printer</string>
+    <string name="convret_to_text">convret to text</string>
+    <string name="print">Print</string>
 </resources>
