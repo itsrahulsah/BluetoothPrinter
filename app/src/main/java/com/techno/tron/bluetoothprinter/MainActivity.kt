@@ -1,12 +1,9 @@
 package com.techno.tron.bluetoothprinter
 
-import BpPrinter.mylibrary.BluetoothConnectivity
-import BpPrinter.mylibrary.BpPrinter
-import BpPrinter.mylibrary.CardReader
-import BpPrinter.mylibrary.CardScanner
-import BpPrinter.mylibrary.Scrybe
+import BpPrinter.mylibrary.*
 import android.Manifest.permission.*
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
@@ -40,17 +37,14 @@ class MainActivity : AppCompatActivity(),CardScanner,Scrybe{
     private var printer:BpPrinter? = null
     private lateinit var printerDevice:BluetoothConnectivity
     private val INITIAL_REQUEST = 1337
-    private val  INITIAL_PERMS = listOf(
+    private val key = "deviceName"
+    private val  permissions = listOf(
         BLUETOOTH_SCAN,
         BLUETOOTH,
         BLUETOOTH_CONNECT,
         BLUETOOTH_ADVERTISE,
-        ACCESS_FINE_LOCATION,
-        ACCESS_COARSE_LOCATION,
-        READ_EXTERNAL_STORAGE,
-        WRITE_EXTERNAL_STORAGE,
-        MANAGE_EXTERNAL_STORAGE,
-        BLUETOOTH_ADMIN)
+        BLUETOOTH_ADMIN
+    )
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -58,9 +52,30 @@ class MainActivity : AppCompatActivity(),CardScanner,Scrybe{
         imageView = findViewById(R.id.image)
         btnPrint = findViewById(R.id.btn_print)
         btnConvert = findViewById(R.id.btn_conver_to_text)
-        ActivityCompat.requestPermissions(this, INITIAL_PERMS.toTypedArray(), INITIAL_REQUEST)
+        ActivityCompat.requestPermissions(this, permissions.toTypedArray(), INITIAL_REQUEST)
         printerDevice = BluetoothConnectivity(this)
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+
+        btnConvert?.setOnClickListener{
+            if(bitmap != null) {
+                textRecognizer?.process(InputImage.fromBitmap(bitmap!!, 0))
+                    ?.addOnSuccessListener {
+                        imageView?.visibility = View.INVISIBLE
+                        editText?.setText(it.text)
+                        editText?.visibility = View.VISIBLE
+                    }?.addOnFailureListener {
+                        Log.e("TAG", "err : $it")
+                        Toast.makeText(applicationContext,"err: $it",Toast.LENGTH_SHORT).show()
+                    }
+            }
+        }
+        btnPrint?.setOnClickListener{
+            onPrintButtonClick()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
         when (intent?.action) {
             Intent.ACTION_SEND -> {
                 if ("text/plain" == intent.type) {
@@ -69,44 +84,34 @@ class MainActivity : AppCompatActivity(),CardScanner,Scrybe{
                     handleSendImage(intent) // Handle single image being sent
                 }
             }
-            else -> {
-                // Handle other intents, such as being started from the home screen
-            }
-        }
-
-        btnConvert?.setOnClickListener{
-            if(bitmap != null)
-            textRecognizer?.process(InputImage.fromBitmap(bitmap!!, 0))
-                ?.addOnSuccessListener {
-                    imageView?.visibility  = View.INVISIBLE
-                    editText?.setText(it.text)
-                    editText?.visibility = View.VISIBLE
-                }?.addOnFailureListener{
-                    Log.e("TAG","err : $it")
-                }
-        }
-        btnPrint?.setOnClickListener{
-            onPrintButtonClick()
         }
     }
 
     private fun handleSendText(intent: Intent) {
         intent.getStringExtra(Intent.EXTRA_TEXT)?.let {
             editText?.visibility = View.VISIBLE
+            imageView?.visibility = View.GONE
             editText?.setText(it)
         }
     }
 
     private fun handleSendImage(intent: Intent) {
-        (intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri)?.let {
+        editText?.visibility = View.GONE
+        val uri = when{
+            Build.VERSION.SDK_INT>= 33 -> intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+
+            else -> @Suppress("DEPRECATION") intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri
+        }
+        uri?.let {
              this.bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 ImageDecoder.decodeBitmap(ImageDecoder.createSource(this.contentResolver, it))
             } else {
+                 @Suppress("DEPRECATION")
                 MediaStore.Images.Media.getBitmap(this.contentResolver, it)
             }
             btnConvert?.visibility  = View.VISIBLE
             imageView?.visibility = View.VISIBLE
-            imageView?.setImageBitmap(bitmap)
+            imageView?.setImageBitmap(bitmap!!)
         }
     }
 
@@ -134,62 +139,110 @@ class MainActivity : AppCompatActivity(),CardScanner,Scrybe{
 
     private fun onPrintButtonClick(){
         var printerName =""
-        try {
-//            if (!printerDevice.BtConnStatus()) {
+        if(getConnectedDeviceName().isNullOrBlank()){
+            try {
                 val dialog = PairDeviceFragment(printerDevice.pairedPrinters as ArrayList<String>) {
                     printerName = it
-                    try {
-                        printerDevice.connectToPrinter(it)
+                    if (connectPrinter(it)) {
+                        setDeviceName(it)
                         printerDevice.getCardReader(this)
                         printer = printerDevice.aemPrinter
                         btPrint()
-                    }catch (e:IOException) {
-                        if (e.message?.contains("Service discovery failed") == true) {
-                            Toast.makeText(
-                                baseContext,
-                                "Not Connected\n$printerName is unreachable or off otherwise it is connected with other device",
-                                Toast.LENGTH_SHORT
-                            ).show();
-                        } else if (e.message?.contains("Device or resource busy") == true) {
-                            Toast.makeText(
-                                baseContext,
-                                "the device is already connected",
-                                Toast.LENGTH_SHORT
-                            ).show();
-                        } else {
-                            Toast.makeText(baseContext, "Unable to connect", Toast.LENGTH_SHORT)
-                                .show();
-                        }
+                    }else{
+                        Toast.makeText(baseContext,
+                            "Not Connected\n$printerName is unreachable or off otherwise it is connected with other device", Toast.LENGTH_SHORT).show()
                     }
                 }
                 dialog.show(supportFragmentManager, "Select Printer Fragment")
-//            }else{
-//                printer = printerDevice.aemPrinter
-//                btPrint()
-//            }
-        }catch (e:IOException) {
-            if (e.message?.contains("Service discovery failed") == true) {
-                Toast.makeText(baseContext,
-                    "Not Connected\n$printerName is unreachable or off otherwise it is connected with other device", Toast.LENGTH_SHORT).show();
-            } else if (e.message?.contains("Device or resource busy") == true) {
-                Toast.makeText(baseContext, "the device is already connected", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(baseContext, "Unable to connect", Toast.LENGTH_SHORT).show();
+
+            }catch (e:IOException) {
+                if (e.message?.contains("Service discovery failed") == true) {
+                    Toast.makeText(baseContext,
+                        "Not Connected\n$printerName is unreachable or off otherwise it is connected with other device", Toast.LENGTH_SHORT).show()
+                } else if (e.message?.contains("Device or resource busy") == true) {
+                    Toast.makeText(baseContext, "the device is already connected", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(baseContext, "Unable to connect", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }else{
+            if (!connectPrinter(getConnectedDeviceName()!!)) {
+                removeDeviceName()
+                onPrintButtonClick()
+            }else{
+                printerDevice.getCardReader(this)
+                printer = printerDevice.aemPrinter
+                btPrint()
             }
         }
     }
 
+    private fun removeDeviceName() {
+        val editor = getSharedPreferences("Device", MODE_PRIVATE).edit()
+        editor.remove(key)
+        editor.apply()
+    }
+
     private fun btPrint(){
+        val greeting = "\n\nThank You visit again... \nAryan Enterprisess"
         try {
             if(printer != null){
-                val text = editText?.text.toString()
+                val text = editText?.text.toString() + greeting
                 printer!!.print(text)
+                printer!!.setCarriageReturn()
                 printer!!.setCarriageReturn()
                 printer!!.setCarriageReturn()
                 printer!!.setCarriageReturn()
             }
         }catch (e:IOException){
-            Toast.makeText(baseContext,e.message, Toast.LENGTH_SHORT).show();
+            Toast.makeText(baseContext,e.message, Toast.LENGTH_SHORT).show() 
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        printerDevice.disConnectPrinter()
+        finish()
+    }
+
+    private fun getConnectedDeviceName():String?{
+        val sf = getSharedPreferences("Device", MODE_PRIVATE)
+        return if(sf.contains(key)){
+             sf.getString(key,"")
+        }else{
+            null
+        }
+    }
+
+    private fun setDeviceName(deviceName:String){
+        val editor = getSharedPreferences("Device", MODE_PRIVATE).edit()
+        editor.putString("deviceName",deviceName)
+        editor.apply()
+    }
+
+
+    private fun connectPrinter(deviceName: String):Boolean{
+       return try {
+            printerDevice.connectToPrinter(deviceName)
+
+        }catch (e:IOException) {
+            if (e.message?.contains("Service discovery failed") == true) {
+                Toast.makeText(
+                    baseContext,
+                    "Not Connected\n$deviceName is unreachable or off otherwise it is connected with other device",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else if (e.message?.contains("Device or resource busy") == true) {
+                Toast.makeText(
+                    baseContext,
+                    "the device is already connected",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                Toast.makeText(baseContext, "Unable to connect", Toast.LENGTH_SHORT)
+                    .show()
+            }
+           false
         }
     }
 }
